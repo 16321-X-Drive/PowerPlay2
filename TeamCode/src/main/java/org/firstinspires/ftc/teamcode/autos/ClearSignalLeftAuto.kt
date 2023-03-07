@@ -1,14 +1,12 @@
 package org.firstinspires.ftc.teamcode.autos
 
-import com.acmerobotics.dashboard.FtcDashboard
 import com.acmerobotics.roadrunner.geometry.Pose2d
 import com.acmerobotics.roadrunner.geometry.Vector2d
-import com.acmerobotics.roadrunner.trajectory.Trajectory
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode
-import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit
 import org.firstinspires.ftc.teamcode.lib.LinearOpModeEx
 import org.firstinspires.ftc.teamcode.rr.drive.SampleMecanumDrive
+import org.firstinspires.ftc.teamcode.rr.trajectorysequence.TrajectorySequence
 import org.firstinspires.ftc.teamcode.subsytems.ClawLift
 import org.firstinspires.ftc.teamcode.subsytems.Decision
 import org.firstinspires.ftc.teamcode.subsytems.Detector
@@ -18,10 +16,10 @@ import kotlin.math.PI
 import kotlin.math.absoluteValue
 import kotlin.math.sign
 
-class LeftAuto : LinearOpModeEx() {
-    @Autonomous(preselectTeleOp = PRESELECTED_TELEOP)
-    class Left : LinearOpMode() {
-        override fun runOpMode() = LeftAuto().runOpMode(this)
+class ClearSignalLeftAuto : LinearOpModeEx() {
+    @Autonomous(name = "Left 1+2", preselectTeleOp = PRESELECTED_TELEOP)
+    class ClearSignal : LinearOpMode() {
+        override fun runOpMode() = ClearSignalLeftAuto().runOpMode(this)
     }
 
     override fun isAuto() = true
@@ -31,19 +29,9 @@ class LeftAuto : LinearOpModeEx() {
     val distances: Distances by lazy { Distances(hardware) }
     val detector: Detector by lazy { Detector(hardware, Rect(140, 150, 30, 15)) }
 
-    fun swivelLeft() {
-        clawLift.swivelPos = -1.0
-        sleep(750)
-    }
-
-    fun swivelRight() {
-        clawLift.swivelPos = 1.0
-        sleep(750)
-    }
-
     fun swivelCenter() {
         clawLift.swivelPos = 0.0
-        sleep(750)
+        sleep(250)
     }
 
     fun lower() {
@@ -89,22 +77,60 @@ class LeftAuto : LinearOpModeEx() {
     }
 
     val START = Pose2d(
-        -34.0,
-        -72 + 13.5 / 2,
-        PI / 2
+        -34.0, -72 + 13.5 / 2, PI / 2
     )
     val HEIGHT = -12.0
-    lateinit var traj1: Trajectory
+    lateinit var traj1: TrajectorySequence
 
     override fun init() {
         detector.init()
 
-        clawLift.isOpen = false
-        clawLift.swivelPos = 0.0
+        traj1 = drive.trajectorySequenceBuilder(START)
+            .splineToConstantHeading(Vector2d(-34.0, -41.0), PI / 2)
+            .splineToLinearHeading(Pose2d(-50.0, -39.0, PI * 3 / 5), PI).forward(3.0).back(6.0)
+            .addDisplacementMarker {
+                clawLift.height = ClawLift.MEDIUM_JUNCTION
+            }
+            .lineToLinearHeading(Pose2d(-34.0, -32.0, PI / 2)).build()
 
-        traj1 = drive.trajectoryBuilder(START)
-            .forward(38.0)
+
+        clawLift.swivelPos = 1.0
+        clawLift.isOpen = false
+    }
+
+    fun cycle(stackHeight: Double, poleHeight: Double, stack: Pose2d, pole: Pose2d) {
+        clawLift.height = stackHeight
+        turnToHeading(PI)
+
+        val traj3 = drive.trajectoryBuilder(drive.poseEstimate)
+            .lineToLinearHeading(stack)
             .build()
+
+        drive.followTrajectory(traj3)
+
+        grab()
+        sleep(500)
+        clawLift.height = poleHeight
+        sleep(500)
+
+        val traj4 = drive.trajectoryBuilder(drive.poseEstimate)
+            .lineToLinearHeading(pole)
+            .build()
+
+        drive.followTrajectory(traj4)
+        moveToPole(-0.3, { distances.poleDistLeft() }, 0)
+        clawLift.swivelPos = -1.0
+        sleep(500)
+        drive.followTrajectory(
+            drive.trajectoryBuilder(drive.poseEstimate)
+                .lineToLinearHeading(drive.poseEstimate.plus(Pose2d(-0.5, -2.0)))
+                .build()
+        )
+
+        lower()
+        drop()
+        swivelCenter()
+
     }
 
     override fun once() {
@@ -114,69 +140,44 @@ class LeftAuto : LinearOpModeEx() {
         telemetry.addData("decision", decision)
         telemetry.update()
 
-        clawLift.height = ClawLift.MEDIUM_JUNCTION
-        drive.followTrajectory(traj1)
+        drive.followTrajectorySequence(traj1)
+
+        clawLift.tick()
         moveToPole(0.3, { distances.poleDistRight() })
-        swivelRight()
+        drive.followTrajectory(
+            drive.trajectoryBuilder(drive.poseEstimate)
+                .lineToLinearHeading(drive.poseEstimate.plus(Pose2d(-1.0, 0.0)))
+                .build()
+        )
         lower()
         drop()
         swivelCenter()
-        clawLift.height = ClawLift.FIVE_CONES + 300
+        clawLift.height = ClawLift.FIVE_CONES
 
-        val traj2 = drive.trajectorySequenceBuilder(drive.poseEstimate)
-            .forward(20.0)
+        val traj2 = drive.trajectoryBuilder(drive.poseEstimate)
             .lineToLinearHeading(Pose2d(START.x, HEIGHT, PI / 2))
             .build()
 
-        drive.followTrajectorySequence(traj2)
+        drive.followTrajectory(traj2)
         turnToHeading(PI)
 
-        val stack = Pose2d(-58.5, HEIGHT, PI)
-
         var yEstimate = -72 + distances.wallDistLeft()
+        telemetry.addData("y est", yEstimate)
+        telemetry.update()
         if (yEstimate !in -20.0..-10.0) yEstimate = drive.poseEstimate.y
         drive.poseEstimate = drive.poseEstimate.copy(y = yEstimate)
 
-        val heights = arrayOf(
-            ClawLift.FIVE_CONES,
-            ClawLift.FOUR_CONES,
-            ClawLift.THREE_CONES,
-            ClawLift.TWO_CONES,
-            ClawLift.DOWN
-        )
-        for (height in 0 until 2) {
-            clawLift.height = heights[height]
-            turnToHeading(PI)
+        val stack1 = Pose2d(-59.25, HEIGHT, PI)
+        val stack2 = Pose2d(-60.0, HEIGHT, PI)
+        val mediumPole = Pose2d(-30.0, HEIGHT - 1.5, PI)
+        val lowPole = Pose2d(-54.0, HEIGHT - 1.5, PI)
 
-            val thisStack = stack.copy(x = stack.x - height * 1.5)
-            val traj3 = drive.trajectoryBuilder(drive.poseEstimate)
-                .lineToLinearHeading(thisStack)
-                .build()
-
-            drive.followTrajectory(traj3)
-
-            grab()
-            sleep(500)
-            clawLift.height = ClawLift.MEDIUM_JUNCTION
-            sleep(500)
-
-            val traj4 = drive.trajectoryBuilder(drive.poseEstimate)
-                .lineToLinearHeading(Pose2d(-30.0, HEIGHT - 1.5, PI))
-                .build()
-
-            drive.followTrajectory(traj4)
-            moveToPole(-0.3, { distances.poleDistLeft() }, 0)
-            clawLift.swivelPos = -1.0
-            sleep(500)
-            drive.followTrajectory(
-                drive.trajectoryBuilder(drive.poseEstimate)
-                    .lineToLinearHeading(drive.poseEstimate.plus(Pose2d(-0.5, -0.5)))
-                    .build()
-            )
-
-            lower()
-            drop()
-            swivelCenter()
+        if (decision == Decision.Green) {
+            cycle(ClawLift.FIVE_CONES, ClawLift.LOW_JUNCTION, stack1, lowPole)
+            cycle(ClawLift.FOUR_CONES, ClawLift.MEDIUM_JUNCTION, stack2, mediumPole)
+        } else {
+            cycle(ClawLift.FIVE_CONES, ClawLift.MEDIUM_JUNCTION, stack1, mediumPole)
+            cycle(ClawLift.FOUR_CONES, ClawLift.LOW_JUNCTION, stack2, lowPole)
         }
 
         val park = when (decision) {

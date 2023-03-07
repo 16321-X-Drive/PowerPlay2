@@ -48,8 +48,8 @@ class ClawLift(hardware: Hardware) {
 
     fun constrainSwivelPos(desired: Double): Double =
         when (leftMotor.currentPosition.coerceAtMost(height.toInt())) {
-            in -100..700 -> desired.constrainMagnitude(0.1)
-            in 700..1400 -> desired.constrainMagnitude(0.1 + (leftMotor.currentPosition.toDouble() - 700.0) * 0.9 / 700.0)
+            in -100..700 -> desired.constrainMagnitude(0.15)
+            in 700..1400 -> desired.constrainMagnitude(0.15 + (leftMotor.currentPosition.toDouble() - 700.0) * 0.85 / 700.0)
             else -> desired.constrainMagnitude(1.0)
         }
 

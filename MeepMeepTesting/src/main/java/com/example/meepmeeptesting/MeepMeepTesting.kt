@@ -1,6 +1,7 @@
 package com.example.meepmeeptesting
 
 import com.acmerobotics.roadrunner.geometry.Pose2d
+import com.acmerobotics.roadrunner.geometry.Vector2d
 import com.noahbres.meepmeep.MeepMeep
 import com.noahbres.meepmeep.MeepMeep.Background
 import com.noahbres.meepmeep.roadrunner.DefaultBotBuilder
@@ -25,8 +26,11 @@ object MeepMeepTesting {
                             PI/2
                         )
                     )
-                        .forward(43.0)
-                        .splineToLinearHeading(Pose2d(-44.0, -12.0, PI), PI)
+                        .splineToConstantHeading(Vector2d(-34.0, -46.0), PI/2)
+                        .splineToConstantHeading(Vector2d(-50.0, -33.0), PI)
+                        .splineToConstantHeading(Vector2d(-34.0, -41.0), -PI/2)
+//                        .forward(43.0)
+//                        .splineToLinearHeading(Pose2d(-44.0, -12.0, PI), PI)
                         .build()
                 }
         meepMeep.setBackground(Background.FIELD_POWERPLAY_OFFICIAL)
